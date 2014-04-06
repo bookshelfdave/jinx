@@ -129,6 +129,9 @@ func (p *Parser) Parse(ps *ParserState) *ParseResult {
     return p.parseFn(p, ps)
 }
 
+
+// TODO: squash ConcatParams + ConcatArray into the same functions
+//       just use an array instead of a param list
 func ConcatParams(s ...interface{}) interface{} {
     var a string
     for i := range s {
@@ -140,6 +143,11 @@ func ConcatParams(s ...interface{}) interface{} {
     }
     return a
 }
+
+func IgnoreParams(s ...interface{}) interface{} {
+    return ""
+}
+
 
 func ConcatArray(arr ...interface{}) interface{} {
     var a string// probably inefficient
@@ -283,6 +291,34 @@ func Alphanum() *Parser {
 
 func AlphanumWithGen(g ResultGen) *Parser {
     return Alt(LetterWithGen(g), DigitWithGen(g))
+}
+
+func Word() *Parser {
+    return Many1(Letter())
+}
+
+func WordWithGen(g ResultGen) *Parser {
+    return Many1WithGen(g, Letter())
+}
+
+func Number() *Parser {
+    return Many1(Digit())
+}
+
+func NumberWithGen(g ResultGen) *Parser {
+    return Many1WithGen(g, Digit())
+}
+
+func WS() *Parser {
+    return CharFrom("\n\t\r")
+}
+
+func IgnoreWS() *Parser {
+    return Ignore(CharFrom("\n\t\r"))
+}
+
+func WSWithGen(g ResultGen) *Parser {
+    return CharFromWithGen(g, "\n\t\r")
 }
 
 func Many(subparser *Parser) *Parser {
@@ -562,6 +598,26 @@ func SepByWithGen(g ResultGen, p *Parser, sep *Parser) *Parser{
     d := &sepByData{p, sep}
     return &Parser{d, sepByParser, g}
 }
+
+
+func ignoreParser(p *Parser, ps *ParserState) *ParseResult {
+    if p.data == nil {
+        return &ParseResult{"Ignore object doesn't have a parser", false, ps.Position, 0}
+    }
+    finalPosition := ps.Position
+    subparser := p.data.(*Parser)
+    result := subparser.Parse(ps)
+    if result.Success {
+        return &ParseResult{"", true, finalPosition, result.Length}
+    } else {
+        return &ParseResult{nil, false, ps.Position, 0}
+    }
+}
+
+func Ignore(subparser *Parser) *Parser {
+    return &Parser{subparser, ignoreParser, nil}
+}
+
 
 //sepEndBy parses a sequence of p separated and optionally ended by sep.
 

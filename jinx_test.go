@@ -1,9 +1,12 @@
 package main
 import (
-    "testing" //import go package for testing related functionality
-    "strconv"
+    "testing"
+    //"strconv"
     "fmt"
     )
+
+// Most of these tests use the ConcatParams result generator, which
+// returns a concatenated string of parse results
 
 func TestSimpleChar(t *testing.T) {
     ps := new(ParserState)
@@ -11,7 +14,6 @@ func TestSimpleChar(t *testing.T) {
 
     p0 := Char('1')
     result := p0.Parse(ps)
-    //&main.ParseResult{Result:"123", Success:true, Position:0, Length:3}
     if(result.Success == false) {
         t.Error("Expected parse success")
     }
@@ -488,40 +490,66 @@ func TestSepBy(t *testing.T) {
         }
     }
 
-    {
-        ps := new(ParserState)
-        ps.ParserFromString("[1,2,3,4]")
-        g := func (arr ...interface{}) interface{} {
-            ss := (arr[0]).([]interface{})
-            intList := make([]int, len(ss))
-            for i,_ := range ss {
-                if v, ok := ss[i].(string); ok {
-                    intval, _ := strconv.Atoi(v)
-                    intList[i] = intval
-                } else {
-                    fmt.Println("Invalid type")
-                }
-            }
-            return intList
-        }
-        digitList := SepByWithGen(g,Digit(), Char(','))
-        digits := Between(Char('['), digitList, Char(']'))
-        result := digits.Parse(ps)
-        if(result.Success == false) {
-            t.Error("Expected parse success")
-        }
-        if(result.Result != "1234") {
-            t.Error("Expected 1234")
-        }
-        if(result.Position != 1) {
-            t.Error("Expected Position == 1")
-        }
-        if(result.Length != 4) {
-         t.Error("Expected Length == 4")
-        }
-    }
+    // {
+    //     ps := new(ParserState)
+    //     ps.ParserFromString("[1,2,3,4]")
+    //     g := func (arr ...interface{}) interface{} {
+    //         ss := (arr[0]).([]interface{})
+    //         intList := make([]int, len(ss))
+    //         for i,_ := range ss {
+    //             if v, ok := ss[i].(string); ok {
+    //                 intval, _ := strconv.Atoi(v)
+    //                 intList[i] = intval
+    //             } else {
+    //                 fmt.Println("Invalid type")
+    //             }
+    //         }
+    //         return intList
+    //     }
+    //     digitList := SepByWithGen(g,Digit(), Char(','))
+    //     digits := Between(Char('['), digitList, Char(']'))
+    //     result := digits.Parse(ps)
+    //     if(result.Success == false) {
+    //         t.Error("Expected parse success")
+    //     }
+    //     if(result.Result != "1234") {
+    //         t.Error("Expected 1234")
+    //     }
+    //     if(result.Position != 1) {
+    //         t.Error("Expected Position == 1")
+    //     }
+    //     if(result.Length != 4) {
+    //      t.Error("Expected Length == 4")
+    //     }
+    // }
 
     //type ResultGen func(s ...interface{}) interface{}
+}
 
+
+func TestParseCSV(t *testing.T) {
+    ps := new(ParserState)
+    ps.ParserFromString("foo,bar,baz\n1,2,3\n4,5,6\n7,8,9")
+
+    header := Seq(SepBy(Word(), Char(',')), IgnoreWS())
+    line   := Seq(SepBy(Number(), Char(',')), IgnoreWS())
+    lines  := Many(line)
+
+    csv    := Seq(header, lines)
+    result := csv.Parse(ps)
+    fmt.Println(result)
+
+    if(result.Success == false) {
+        t.Error("Expected parse success")
+    }
+    if(result.Result != "foobarbaz123456") {
+        t.Error("Expected foobarbaz123456")
+    }
+    if(result.Position != 0) {
+        t.Error("Expected Position == 0")
+    }
+    if(result.Length != 18) {
+     t.Error("Expected Length == 18")
+    }
 }
 
