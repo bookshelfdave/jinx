@@ -5,6 +5,28 @@ import (
     "fmt"
     )
 
+func assertRead(jr *JinxReader, bs []byte, s string, t *testing.T) bool {
+    if string(bs) == s {
+        return true
+    } else {
+        t.Error("Fail!")
+        return false
+    }
+}
+
+func TestJinxReader(t *testing.T) {
+    s := "123456789"
+    jr := NewJinxReaderFromString(s)
+    assertRead(jr, 1, "1", t)
+    assertRead(jr, 1, "2", t)
+    assertPeek(jr, 3, "345", t)
+    assertRead(jr, 3, "345", t)
+    jr.Seek(0)
+    assertRead(jr, 3, "123", t)
+    jr.Seek(0)
+    assertRead(jr, 3, "123", t)
+}
+
 // Most of these tests use the ConcatParams result generator, which
 // returns a concatenated string of parse results
 
@@ -530,8 +552,9 @@ func TestSepBy(t *testing.T) {
 func TestParseCSV(t *testing.T) {
     ps := new(ParserState)
     ps.ParserFromString("foo,bar,baz\n1,2,3\n4,5,6\n7,8,9")
-
-    header := Seq(SepBy(Word(), Char(',')), IgnoreWS())
+    // TODO: not checking for WS at the end of the header row
+    //       ... but the parse succeeds???
+    header := Seq(SepBy(Word(), Char(',')))
     line   := Seq(SepBy(Number(), Char(',')), IgnoreWS())
     lines  := Many(line)
 

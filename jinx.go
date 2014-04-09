@@ -1,104 +1,22 @@
 package main
 
 import (
-    "bufio"
-    "fmt"
     "os"
-    "strings"
-    "errors"
+    "fmt"
+    //"errors"
     //"strconv"
     //"reflect"
 )
 
-type LAReader struct {
-    R *bufio.Reader
-    la_mode bool
-    la_offset int
-}
-
-func (b *LAReader) Read(l int) ([]byte, error) {
-    if b.la_mode {
-        // lookahead mode doesn't move the fd position
-        return b.FakeRead(l)
-    } else {
-         buf := make([]byte, l)
-         n, err := b.R.Read(buf)
-         if err != nil {
-            return nil, err
-         } else if n != l {
-            return nil, errors.New("Not enough data available to Read")
-         } else {
-            // fmt.Printf(">>>>> READ %c\n", buf[0])
-            // fmt.Println(buf)
-            return buf, nil
-         }
-    }
-}
-
-func (b *LAReader) FakeRead(l int) ([]byte, error) {
-    var bs []byte
-    var err error
-
-    // lookahead mode, add the number of bytes we've
-    // already "read" (LA'd) to the size of the peek
-    // This is to handle multiple calls to Peek() during
-    // la_mode == true
-    bs, err = b.R.Peek(l+b.la_offset)
-    bs = bs[b.la_offset:]
-    // the line below is the only diff
-    b.la_offset += l
-
-    if err != nil {
-        return nil, err
-    } else if len(bs) != l {
-        return nil, errors.New("Not enough data available to Peek")
-    } else {
-        //fmt.Printf(">>>>> FAKE %c\n", bs[0])
-        return bs, nil
-    }
-}
-
-func (b *LAReader) Peek(l int) ([]byte, error) {
-    var bs []byte
-    var err error
-    if b.la_mode {
-        // lookahead mode, add the number of bytes we've
-        // already "read" (LA'd) to the size of the peek
-        // This is to handle multiple calls to Peek() during
-        // la_mode == true
-        bs, err = b.R.Peek(l+b.la_offset)
-        bs = bs[b.la_offset:]
-        //b.la_offset += l
-    } else {
-        bs, err = b.R.Peek(l)
-    }
-    if err != nil {
-        return nil, err
-    } else if len(bs) != l {
-        return nil, errors.New("Not enough data available to Peek")
-    } else {
-        //fmt.Printf(">>>>> PEEK %c\n", bs[0])
-        return bs, nil
-    }
-}
-
-func (b *LAReader) StartLA() {
-    b.la_mode = true
-    b.la_offset = 0
-}
-
-func (b *LAReader) StopLA() {
-    b.la_mode = false
-    b.la_offset = 0
-}
-
-func NewLAReader(br *bufio.Reader) *LAReader {
-    return &LAReader{br,false,0}
-}
-
-
 type ResultGen func(s ...interface{}) interface{}
 
+
+// type ParsePosition struct {
+//     // TODO: change int's to uint64 etc
+//     Index int
+//     Line  int
+//     Col   int
+// }
 
 type ParseResult struct {
     Result  interface{}
@@ -108,7 +26,7 @@ type ParseResult struct {
 }
 
 type ParserState struct {
-    LAR        *LAReader
+    R          *JinxReader
     //R        *bufio.Reader
     Position int
     Line     int
@@ -174,17 +92,16 @@ func decStringResult(s ...interface{}) interface{} {
 }
 
 func (ps *ParserState) ParserFromString(s string) {
-    r := strings.NewReader(s)
-    ps.LAR = NewLAReader(bufio.NewReader(r))
+    ps.R = NewJinxReaderFromString(s)
 }
 
-func (ps *ParserState) FromFile(fn string) {
-    fi, _ := os.Open(fn)
-    // TODO: defer?
-    ps.fi = fi
-    r := NewLAReader(bufio.NewReader(fi))
-    ps.LAR = r
-}
+// func (ps *ParserState) FromFile(fn string) {
+//     fi, _ := os.Open(fn)
+//     // TODO: defer?
+//     ps.fi = fi
+//     r := NewLAReader(bufio.NewReader(fi))
+//     ps.R = r
+// }
 
 
 // func Fail() *Parser {
@@ -202,12 +119,12 @@ func CharWithGen(g ResultGen, c byte) *Parser {
     parse := func(p *Parser, ps *ParserState) *ParseResult {
             cdata := p.data.(byte)
             //fmt.Printf("Char(%c) parsing\n", cdata)
-            bytes, err := ps.LAR.Peek(1)
+            bytes, err := ps.R.Peek(1)
             if len(bytes) != 1 || err != nil {
                 // TODO: parse error
                 return &ParseResult{nil, false, ps.Position, 0}
             } else if bytes[0] == cdata {
-                ps.LAR.Read(1)
+                ps.R.Read(1)
                 //fmt.Printf("Char: %c\n", bytes[0])
                 pr := &ParseResult{p.Gen(string(bytes)), true, ps.Position, 1}
                 ps.Position++
@@ -230,7 +147,7 @@ func CharFrom(s string) *Parser {
 func CharFromWithGen(g ResultGen, s string) *Parser {
      parse := func(p *Parser, ps *ParserState) *ParseResult {
             sdata := p.data.([]byte)
-            bytes, err := ps.LAR.Peek(1)
+            bytes, err := ps.R.Peek(1)
             if len(bytes) != 1 || err != nil {
                 // TODO: parse error
                 return &ParseResult{nil, false, ps.Position, 0}
@@ -238,7 +155,7 @@ func CharFromWithGen(g ResultGen, s string) *Parser {
 
             for _,c := range sdata {
                 if bytes[0] == c {
-                    ps.LAR.Read(1)
+                    ps.R.Read(1)
                     pr := &ParseResult{p.Gen(string(bytes)), true, ps.Position, 1}
                     ps.Position++
                     if bytes[0] == '\n' {
@@ -354,7 +271,7 @@ func Many1WithGen(g ResultGen, subparser *Parser) *Parser {
             //results := make([]*ParseResult,1)
             var totalLen int
             results := make([]interface{},0)
-            subparser := p.data.(*Parser)            
+            subparser := p.data.(*Parser)
             // at least 1
             finalPosition := ps.Position
             pr := subparser.Parse(ps)
@@ -387,15 +304,14 @@ func AttemptWithGen(g ResultGen, subparser *Parser) *Parser {
     parse := func(p *Parser, ps *ParserState) *ParseResult {
                     subparser := p.data.(*Parser)
                     preLAPosition := ps.Position
-                    ps.LAR.StartLA()
+                    rewindTo := ps.R.Offset
                     pr := subparser.Parse(ps)
-                    //fmt.Printf("%#v\n", pr)
-                    ps.LAR.StopLA()
                     ps.Position = preLAPosition
                     if pr.Success {
                         pr = subparser.Parse(ps)
                         return &ParseResult{p.Gen(pr.Result), true, ps.Position, pr.Length}
                     } else {
+                        ps.R.Seek(rewindTo)
                         return &ParseResult{nil, false, ps.Position, 0}
                     }
     }
@@ -410,13 +326,13 @@ func StrWithGen(g ResultGen, s string) *Parser {
     parse := func(p *Parser, ps *ParserState) *ParseResult {
             sdata := p.data.(string)
             expectedLen := len(s)
-            bytes, err := ps.LAR.Peek(expectedLen)
+            bytes, err := ps.R.Peek(expectedLen)
             if len(bytes) != expectedLen || err != nil {
                 // TODO: parse error
                 return &ParseResult{nil, false, ps.Position, 0}
             } else if string(bytes) == sdata {
                 // Use read for it's side effect on the buffer, ignore the result
-                ps.LAR.Read(expectedLen)
+                ps.R.Read(expectedLen)
                 pr := &ParseResult{p.Gen(string(bytes)), true, ps.Position, expectedLen}
                 ps.Position += expectedLen
                 // todo: look for newlines
@@ -621,8 +537,41 @@ func Ignore(subparser *Parser) *Parser {
 
 //sepEndBy parses a sequence of p separated and optionally ended by sep.
 
+
+
 func main() {
-    fmt.Println("Hello world")
+    //r := strings.NewReader("Hello world")
+    // s := "Dave Test"
+    // jr := NewJinxReaderFromString(s)
+    // fmt.Printf("%c\n", jr.Read(1)[0])
+    // fmt.Printf("%c\n", jr.Read(1)[0])
+    // fmt.Printf("%c\n", jr.Peek(1)[0])
+    // fmt.Printf("%c\n", jr.Read(1)[0])
+    // jr.Seek(1)
+    // fmt.Printf("%c\n", jr.Read(1)[0])
+    // jr.Seek(0)
+    // fmt.Printf("%c\n", jr.Read(1)[0])
+    // buf := make([]byte, 1)
+    // jr.rs.Read(buf)
+    // fmt.Printf("%c\n", buf[0])
+
+    // jr.rs.Read(buf)
+    // fmt.Printf("%c\n", buf[0])
+
+    // jr.rs.Seek(0,0)
+    // jr.rs.Read(buf)
+    // fmt.Printf("%c\n", buf[0])
+
+    // rs0 := io.ReadSeeker(r)
+    // x := bufio.NewReader(rs0)
+    // b, _ := x.ReadByte()
+    // fmt.Printf("%c\n", b)
+
+    // rs1 := io.ReadSeeker(r)
+    // rs1.Seek(0,0)
+    // x1 := bufio.NewReader(rs1)
+    // b1, _ := x1.ReadByte()
+    // fmt.Printf("%c\n", b1)
     // fmt.Println(s.Parse(ps))
     // d := MSeq(
     //     func(s ...interface{}) interface{} {
