@@ -51,10 +51,17 @@ func (p *Parser) WithGen(g ResultGen) *Parser {
     return p
 }
 
-// func (p *Parser) PipeGen(g ...ResultGen) *Parser {
-//     p.Gen = g
-//     return p
-// }
+func (p *Parser) PipeGen(gs ...ResultGen) *Parser {
+    pgen := func(s interface{}) interface{} {
+        result := s
+        for _, g := range gs {
+            result = g(result)
+        }
+        return result
+    }
+    p.Gen = pgen
+    return p
+}
 
 
 func (ps *ParserState) ParserFromString(s string) {
@@ -98,7 +105,7 @@ func Char(c byte) *Parser {
             return &ParseResult{nil, false, ps.Position, 0}
     }
     //fmt.Printf("Making a Char parser with %c\n", c)
-    return &Parser{c, parse, Identity}
+    return &Parser{c, parse, GenIdentity}
 }
 
 func CharFrom(s string) *Parser {
@@ -124,7 +131,7 @@ func CharFrom(s string) *Parser {
             return &ParseResult{nil, false, ps.Position, 0}
     }
     byteArray := []byte(s)
-    return &Parser{byteArray, parse, Identity}
+    return &Parser{byteArray, parse, GenIdentity}
 }
 
 func Lower() *Parser {
@@ -180,7 +187,7 @@ func Many(subparser *Parser) *Parser {
             }
             return &ParseResult{p.Gen(results), true, ps.Position, totalLen}
     }
-    return &Parser{subparser, parse, ConcatParams}
+    return &Parser{subparser, parse, GenString}
 }
 
 func Many1(subparser *Parser) *Parser {
@@ -209,7 +216,7 @@ func Many1(subparser *Parser) *Parser {
             }
             return &ParseResult{p.Gen(results), true, finalPosition, totalLen}
     }
-    return &Parser{subparser, parse, ConcatParams}
+    return &Parser{subparser, parse, GenString}
 }
 
 
@@ -221,14 +228,14 @@ func Attempt(subparser *Parser) *Parser {
                     pr := subparser.Parse(ps)
                     ps.Position = preLAPosition
                     if pr.Success {
-                        pr = subparser.Parse(ps)
-                        return &ParseResult{p.Gen(pr.Result), true, ps.Position, pr.Length}
+                        return &ParseResult{pr.Result, true, ps.Position, pr.Length}
                     } else {
                         ps.R.Seek(rewindTo)
                         return &ParseResult{nil, false, ps.Position, 0}
                     }
     }
-    return &Parser{subparser, parse, ConcatParams}
+    // Gen is unused!
+    return &Parser{subparser, parse, GenIdentity}
 }
 
 func Str(s string) *Parser {
@@ -253,7 +260,7 @@ func Str(s string) *Parser {
             return &ParseResult{nil, false, ps.Position, 0}
     }
 
-    return &Parser{s, parse, Identity}
+    return &Parser{s, parse, GenIdentity}
 }
 
 func seqParser(p *Parser, ps *ParserState) *ParseResult {
@@ -281,7 +288,7 @@ func seqParser(p *Parser, ps *ParserState) *ParseResult {
 }
 
 func Seq(parsers ...*Parser) *Parser {
-    return &Parser{parsers, seqParser, ConcatParams}
+    return &Parser{parsers, seqParser, GenIdentity}
 }
 
 func altParser(p *Parser, ps *ParserState) *ParseResult {
@@ -303,7 +310,7 @@ func altParser(p *Parser, ps *ParserState) *ParseResult {
 }
 
 func Alt(parsers ...*Parser) *Parser {
-    return &Parser{parsers, altParser, Identity}
+    return &Parser{parsers, altParser, GenIdentity}
 }
 
 
@@ -316,7 +323,7 @@ func proxyParser(p *Parser, ps *ParserState) *ParseResult {
 }
 
 func Proxy() *Parser {
-    return &Parser{nil, proxyParser, ConcatParams}
+    return &Parser{nil, proxyParser, GenString}
 }
 
 func ProxySetParser(proxy *Parser, p *Parser) {
@@ -349,16 +356,17 @@ func betweenParser(p *Parser, ps *ParserState) *ParseResult {
 
 func Between(first *Parser, p *Parser, last *Parser) *Parser {
     bd := &betweenData{first, last, p}
-    return &Parser{bd, betweenParser, Identity}
+    return &Parser{bd, betweenParser, GenIdentity}
 }
 
-type sepByData struct {
-    p   *Parser
-    sep *Parser
-}
+// type sepByData struct {
+//     p   *Parser
+//     sep *Parser
+// }
 
-// The parser sepBy p sep parses zero or more occurrences of p separated
-// by sep (in EBNF: (p (sep p)*)?). It returns a list of the results returned by p.
+// //The parser sepBy p sep parses zero or more occurrences of p separated
+// //by sep (in EBNF: (p (sep p)*)?). It returns a list of the results returned by p.
+// // TODO: refactor this!
 // func sepByParser(p *Parser, ps *ParserState) *ParseResult {
 //     d := p.data.(*sepByData)
 //     prs := make([]*ParseResult, 0)
@@ -394,12 +402,61 @@ type sepByData struct {
 //     }
 // }
 
+
 // func SepBy(p *Parser, sep *Parser) *Parser {
-//     return SepByWithGen(ConcatArray, p, sep)
+//     sbd := &sepByData{p, sep}
+//     return &Parser{sbd, sepByParser, GenString}
 // }
 
-//sepBy p sep parses a sequence of p separated by sep and returns the results in a list.
+type sepByData struct {
+    p   *Parser
+    next *Parser
+}
 
+func sepByParser(p *Parser, ps *ParserState) *ParseResult {
+    d := p.data.(*sepByData)
+
+    prs := make([]*ParseResult, 0)
+    raw_results := make([]interface{}, 0)
+
+    finalPosition := ps.Position
+    result := d.p.Parse(ps)
+    if !result.Success {
+        return &ParseResult{"", true, ps.Position, 0}
+    }
+
+    // append the result to all results
+    prs = append(prs, result)
+    raw_results = append(raw_results, result.Result)
+
+    for {
+        result := d.next.Parse(ps)
+        if result.Success {
+            prs = append(prs, result)
+            raw_results = append(raw_results, result.Result)
+        } else {
+            break
+        }
+    }
+
+    var totalLength int
+    for _, i := range prs {
+        totalLength += i.Length
+    }
+
+    return &ParseResult{p.Gen(raw_results), true, finalPosition, totalLength}
+}
+
+func SepBy(p *Parser, sep *Parser) *Parser {
+    //next := Attempt(Seq(sep, p).WithGen(GenIdentity)).PipeGen(GenSelect1(1))
+    next := Attempt(Seq(sep, p).WithGen(GenSelect1(1)))
+    sbd := &sepByData{p, next}
+    // parse the initial p,
+    // the try sequences of Sep, P
+    return &Parser{sbd, sepByParser, GenIdentity}
+}
+
+//sepBy p sep parses a sequence of p separated by sep and returns the results in a list.
 
 func ignoreParser(p *Parser, ps *ParserState) *ParseResult {
     if p.data == nil {
@@ -425,7 +482,7 @@ func Ignore(subparser *Parser) *Parser {
 
 
 func main() {
-    c := Char('c').WithGen(ConcatParams)
+    c := Char('c').WithGen(GenString)
     fmt.Println(c)
 
     // d := MSeq(

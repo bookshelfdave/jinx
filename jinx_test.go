@@ -1,8 +1,9 @@
 package jinx
 import (
     "testing"
-    //"strconv"
-    //"fmt"
+    "strconv"
+    "fmt"
+   // "reflect"
     )
 
 func assertRead(jr *JinxReader, s string, t *testing.T) bool {
@@ -44,23 +45,51 @@ func TestJinxReader(t *testing.T) {
 // returns a concatenated string of parse results
 
 func TestSimpleChar(t *testing.T) {
-    ps := new(ParserState)
-    ps.ParserFromString("123")
+    fmt.Println("Testing Jinx...")
+    {
+        ps := new(ParserState)
+        ps.ParserFromString("123")
 
-    p0 := Char('1')
-    result := p0.Parse(ps)
-    if(result.Success == false) {
-        t.Error("Expected parse success")
+        p0 := Char('1')
+        result := p0.Parse(ps)
+        if(result.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result.Result != "1") {
+            t.Error("Expected 1")
+        }
+        if(result.Position != 0) {
+            t.Error("Expected Position == 0")
+        }
+        if(result.Length != 1) {
+         t.Error("Expected Length == 1")
+        }
     }
-    if(result.Result != "1") {
-        t.Error("Expected 1")
+
+    {
+        ps := new(ParserState)
+        ps.ParserFromString("123")
+        // instead of returning the string "1", an int is returned
+        p0 := Char('1').WithGen(func (s interface{}) interface{} {
+                str := s.(string)
+                r,_ := strconv.Atoi(str)
+                return r
+            })
+        result := p0.Parse(ps)
+        if(result.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result.Result != 1) {
+            t.Error("Expected 1")
+        }
+        if(result.Position != 0) {
+            t.Error("Expected Position == 0")
+        }
+        if(result.Length != 1) {
+         t.Error("Expected Length == 1")
+        }
     }
-    if(result.Position != 0) {
-        t.Error("Expected Position == 0")
-    }
-    if(result.Length != 1) {
-     t.Error("Expected Length == 1")
-    }
+
 }
 
 func TestMultipleChar(t *testing.T) {
@@ -99,6 +128,7 @@ func TestMultipleChar(t *testing.T) {
     if(result1.Length != 1) {
      t.Error("Expected Length == 1")
     }
+
 }
 
 func TestSimpleStr(t *testing.T) {
@@ -138,26 +168,54 @@ func TestSimpleStr(t *testing.T) {
 }
 
 func TestSimpleSeq(t *testing.T) {
-    ps := new(ParserState)
-    ps.ParserFromString("123")
+    {
+        ps := new(ParserState)
+        ps.ParserFromString("123")
 
-    p0 := Char('1')
-    p1 := Char('2')
-    p2 := Char('3')
-    s  := Seq(p0, p1, p2)
-    result := s.Parse(ps)
+        p0 := Char('1')
+        p1 := Char('2')
+        p2 := Char('3')
+        s  := Seq(p0, p1, p2).WithGen(GenString)
+        result := s.Parse(ps)
 
-    if(result.Success == false) {
-        t.Error("Expected parse success")
+        if(result.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result.Result != "123") {
+            t.Error("Expected 123")
+        }
+        if(result.Position != 0) {
+            t.Error("Expected Position == 0")
+        }
+        if(result.Length != 3) {
+            t.Error("Expected Length == 3")
+        }
     }
-    if(result.Result != "123") {
-        t.Error("Expected 123")
-    }
-    if(result.Position != 0) {
-        t.Error("Expected Position == 0")
-    }
-    if(result.Length != 3) {
-        t.Error("Expected Length == 3")
+
+    {
+        ps := new(ParserState)
+        ps.ParserFromString("123")
+
+        p0 := Char('1')
+        p1 := Char('2')
+        p2 := Char('3')
+        // this generator concats all the chars into a string and then converts
+        // into an int
+        s  := Seq(p0, p1, p2).PipeGen(GenString,GenStringToInt)
+        result := s.Parse(ps)
+
+        if(result.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result.Result != 123) {
+            t.Error("Expected 123")
+        }
+        if(result.Position != 0) {
+            t.Error("Expected Position == 0")
+        }
+        if(result.Length != 3) {
+            t.Error("Expected Length == 3")
+        }
     }
 }
 
@@ -230,7 +288,7 @@ func TestStrSeq(t *testing.T) {
     ps := new(ParserState)
     ps.ParserFromString("foobarbaz")
 
-    alt := Seq(Str("foo"), Str("bar"), Alt(Str("BAZ"), Str("baz")))
+    alt := Seq(Str("foo"), Str("bar"), Alt(Str("BAZ"), Str("baz"))).WithGen(GenString)
     result := alt.Parse(ps)
 
     if(result.Success == false) {
@@ -249,22 +307,37 @@ func TestStrSeq(t *testing.T) {
 
 
 func TestCharFrom(t *testing.T) {
-    ps := new(ParserState)
-    ps.ParserFromString("zya123")
-    oneOf := CharFrom("abcdefghijklmnopqrstuvwxyz")
-    result := oneOf.Parse(ps)
+    {
+        ps := new(ParserState)
+        ps.ParserFromString("zya123")
+        oneOf := CharFrom("abcdefghijklmnopqrstuvwxyz")
+        result0 := oneOf.Parse(ps)
+        result1 := oneOf.Parse(ps)
+        if(result0.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result0.Result != "z") {
+            t.Error("Expected z")
+        }
+        if(result0.Position != 0) {
+            t.Error("Expected Position == 0")
+        }
+        if(result0.Length != 1) {
+         t.Error("Expected Length == 1")
+        }
 
-    if(result.Success == false) {
-        t.Error("Expected parse success")
-    }
-    if(result.Result != "z") {
-        t.Error("Expected z")
-    }
-    if(result.Position != 0) {
-        t.Error("Expected Position == 0")
-    }
-    if(result.Length != 1) {
-     t.Error("Expected Length == 1")
+        if(result1.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result1.Result != "y") {
+            t.Error("Expected z")
+        }
+        if(result1.Position != 1) {
+            t.Error("Expected Position == 1")
+        }
+        if(result1.Length != 1) {
+         t.Error("Expected Length == 1")
+        }
     }
 }
 
@@ -355,8 +428,6 @@ func TestMany1(t *testing.T) {
          t.Error("Expected Length == 1")
         }
     }
-
-
 }
 
 
@@ -380,24 +451,48 @@ func TestManyAlt(t *testing.T) {
     }
 }
 
+// TODO: ATTEMPT IS BROKEN!
 func TestAttempt(t *testing.T) {
-    ps := new(ParserState)
-    ps.ParserFromString("abc")
-    ac := Seq(Char('a'), Char('c'))
-    ab := Seq(Char('a'), Char('b'))
-    m := Alt(Attempt(ac), ab)
-    result := m.Parse(ps)
-    if(result.Success == false) {
-        t.Error("Expected parse success")
+    {
+        ps := new(ParserState)
+        ps.ParserFromString("abc")
+        fc := Seq(Char('f'), Char('c'))
+        ab := Seq(Char('a'), Char('b'))
+        m := Alt(Attempt(fc), ab).WithGen(GenString)
+        result := m.Parse(ps)
+
+        if(result.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result.Result != "ab") {
+            t.Error("Expected ab")
+        }
+        if(result.Position != 0) {
+            t.Error("Expected Position == 0")
+        }
+        if(result.Length != 2) {
+         t.Error("Expected Length == 2")
+        }
     }
-    if(result.Result != "ab") {
-        t.Error("Expected ab")
-    }
-    if(result.Position != 0) {
-        t.Error("Expected Position == 0")
-    }
-    if(result.Length != 2) {
-     t.Error("Expected Length == 2")
+
+    {
+        ps := new(ParserState)
+        ps.ParserFromString("a")
+        p := Attempt(Char('a'))
+        result := p.Parse(ps)
+
+        if(result.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result.Result != "a") {
+            t.Error("Expected a")
+        }
+        if(result.Position != 0) {
+            t.Error("Expected Position == 0")
+        }
+        if(result.Length != 1) {
+         t.Error("Expected Length == 1")
+        }
     }
 }
 
@@ -443,124 +538,130 @@ func TestBetween(t *testing.T) {
     }
 }
 
-// func TestSepBy(t *testing.T) {
-//     {
-//         ps := new(ParserState)
-//         ps.ParserFromString("1,2,3,4")
-//         digits := SepBy(Digit(), Char(','))
-//         result := digits.Parse(ps)
+func TestSepBy(t *testing.T) {
+    // {
+    //     ps := new(ParserState)
+    //     ps.ParserFromString(",2,3,4")
+    //     sep := Char(',')
+    //     p   := Digit()
+    //     next := Attempt(Seq(sep, p))
+    //     fmt.Println(next.Parse(ps))
+    // }
 
-//         if(result.Success == false) {
-//             t.Error("Expected parse success")
-//         }
-//         if(result.Result != "1234") {
-//             t.Error("Expected 1234")
-//         }
-//         if(result.Position != 0) {
-//             t.Error("Expected Position == 0")
-//         }
-//         if(result.Length != 4) {
-//          t.Error("Expected Length == 4")
-//         }
-//     }
+    {
+        ps := new(ParserState)
+        ps.ParserFromString("1,2,3,4")
+        digits := SepBy(Digit(), Char(',')).WithGen(GenString)
+        result := digits.Parse(ps)
+        fmt.Println(result)
+        if(result.Success == false) {
+            t.Error("Expected parse success")
+        }
+        if(result.Result != "1234") {
+            t.Error("Expected 1234")
+        }
+        if(result.Position != 0) {
+            t.Error("Expected Position == 0")
+        }
+        if(result.Length != 4) {
+            t.Error("Expected Length == 4")
+        }
+    }
 
-//     {
-//         // TODO: should this be a failure?
-//         ps := new(ParserState)
-//         ps.ParserFromString("1,2,")
-//         digits := SepBy(Digit(), Char(','))
-//         result := digits.Parse(ps)
-//         if(result.Success == true) {
-//             t.Error("Expected parse failure")
-//         }
-//         if(result.Result != nil) {
-//             t.Error("Expected nil")
-//         }
-//         if(result.Position != 0) {
-//             t.Error("Expected Position == 0")
-//         }
-//         if(result.Length != 0) {
-//          t.Error("Expected Length == 0")
-//         }
-//     }
+    // {
+    //     // TODO: should this be a failure?
+    //     ps := new(ParserState)
+    //     ps.ParserFromString("1,2,")
+    //     digits := SepBy(Digit(), Char(','))
+    //     result := digits.Parse(ps)
+    //     if(result.Success == true) {
+    //         t.Error("Expected parse failure")
+    //     }
+    //     if(result.Result != nil) {
+    //         t.Error("Expected nil")
+    //     }
+    //     if(result.Position != 0) {
+    //         t.Error("Expected Position == 0")
+    //     }
+    //     if(result.Length != 0) {
+    //      t.Error("Expected Length == 0")
+    //     }
+    // }
 
-//     {
-//         ps := new(ParserState)
-//         // sep by 0 or more, passes if if it doesn't find any matches
-//         ps.ParserFromString("xyz")
-//         digits := SepBy(Digit(), Char(','))
-//         result := digits.Parse(ps)
-//         if(result.Success == false) {
-//             t.Error("Expected parse success")
-//         }
-//         if(result.Result != "") {
-//             t.Error("Expected empty result")
-//         }
-//         if(result.Position != 0) {
-//             t.Error("Expected Position == 0")
-//         }
-//         if(result.Length != 0) {
-//          t.Error("Expected Length == 4")
-//         }
-//     }
+    // {
+    //     ps := new(ParserState)
+    //     // sep by 0 or more, passes if if it doesn't find any matches
+    //     ps.ParserFromString("xyz")
+    //     digits := SepBy(Digit(), Char(','))
+    //     result := digits.Parse(ps)
+    //     if(result.Success == false) {
+    //         t.Error("Expected parse success")
+    //     }
+    //     if(result.Result != "") {
+    //         t.Error("Expected empty result")
+    //     }
+    //     if(result.Position != 0) {
+    //         t.Error("Expected Position == 0")
+    //     }
+    //     if(result.Length != 0) {
+    //      t.Error("Expected Length == 4")
+    //     }
+    // }
 
+    // {
+    //     ps := new(ParserState)
+    //     ps.ParserFromString("[1,2,3,4]")
+    //     digits := Between(Char('['),
+    //                 SepBy(Digit(), Char(',')),
+    //             Char(']'))
+    //     result := digits.Parse(ps)
+    //     if(result.Success == false) {
+    //         t.Error("Expected parse success")
+    //     }
+    //     if(result.Result != "1234") {
+    //         t.Error("Expected 1234")
+    //     }
+    //     if(result.Position != 1) {
+    //         t.Error("Expected Position == 1")
+    //     }
+    //     if(result.Length != 4) {
+    //      t.Error("Expected Length == 4")
+    //     }
+    // }
 
-//     {
-//         ps := new(ParserState)
-//         ps.ParserFromString("[1,2,3,4]")
-//         digits := Between(Char('['),
-//                     SepBy(Digit(), Char(',')),
-//                 Char(']'))
-//         result := digits.Parse(ps)
-//         if(result.Success == false) {
-//             t.Error("Expected parse success")
-//         }
-//         if(result.Result != "1234") {
-//             t.Error("Expected 1234")
-//         }
-//         if(result.Position != 1) {
-//             t.Error("Expected Position == 1")
-//         }
-//         if(result.Length != 4) {
-//          t.Error("Expected Length == 4")
-//         }
-//     }
-
-//     // {
-//     //     ps := new(ParserState)
-//     //     ps.ParserFromString("[1,2,3,4]")
-//     //     g := func (arr ...interface{}) interface{} {
-//     //         ss := (arr[0]).([]interface{})
-//     //         intList := make([]int, len(ss))
-//     //         for i,_ := range ss {
-//     //             if v, ok := ss[i].(string); ok {
-//     //                 intval, _ := strconv.Atoi(v)
-//     //                 intList[i] = intval
-//     //             } else {
-//     //                 fmt.Println("Invalid type")
-//     //             }
-//     //         }
-//     //         return intList
-//     //     }
-//     //     digitList := SepByWithGen(g,Digit(), Char(','))
-//     //     digits := Between(Char('['), digitList, Char(']'))
-//     //     result := digits.Parse(ps)
-//     //     if(result.Success == false) {
-//     //         t.Error("Expected parse success")
-//     //     }
-//     //     if(result.Result != "1234") {
-//     //         t.Error("Expected 1234")
-//     //     }
-//     //     if(result.Position != 1) {
-//     //         t.Error("Expected Position == 1")
-//     //     }
-//     //     if(result.Length != 4) {
-//     //      t.Error("Expected Length == 4")
-//     //     }
-//     // }
-
-//     //type ResultGen func(s ...interface{}) interface{}
-// }
+    // {
+    //     ps := new(ParserState)
+    //     ps.ParserFromString("[1,2,3,4]")
+    //     g := func (arr ...interface{}) interface{} {
+    //         ss := (arr[0]).([]interface{})
+    //         intList := make([]int, len(ss))
+    //         for i,_ := range ss {
+    //             if v, ok := ss[i].(string); ok {
+    //                 intval, _ := strconv.Atoi(v)
+    //                 intList[i] = intval
+    //             } else {
+    //                 fmt.Println("Invalid type")
+    //             }
+    //         }
+    //         return intList
+    //     }
+    //     digitList := SepByWithGen(g,Digit(), Char(','))
+    //     digits := Between(Char('['), digitList, Char(']'))
+    //     result := digits.Parse(ps)
+    //     if(result.Success == false) {
+    //         t.Error("Expected parse success")
+    //     }
+    //     if(result.Result != "1234") {
+    //         t.Error("Expected 1234")
+    //     }
+    //     if(result.Position != 1) {
+    //         t.Error("Expected Position == 1")
+    //     }
+    //     if(result.Length != 4) {
+    //      t.Error("Expected Length == 4")
+    //     }
+    // }
+}
 
 
 // func TestParseCSV(t *testing.T) {
@@ -590,3 +691,53 @@ func TestBetween(t *testing.T) {
 //     }
 // }
 
+func TestSelect(t *testing.T) {
+    {
+        gs := GenSelect(1,3)
+        data := []interface{}{0,1,2,3,4,5}
+        result := gs(data).([]interface{})
+        if len(result) != 2 {
+            t.Error("result slice invalid size")
+        }
+        if result[0] != 1 {
+            t.Error("Expected 1")
+        }
+
+        if result[1] != 3 {
+            t.Error("Expected 3")
+        }
+    }
+
+    {
+        gs := GenSelect(3)
+        data := []interface{}{0,1,2,3,4,5}
+        result := gs(data).([]interface{})
+        if len(result) != 1 {
+            t.Error("result slice invalid size")
+        }
+        if result[0] != 3 {
+            t.Error("Expected 3")
+        }
+    }
+}
+
+
+func TestSelect1(t *testing.T) {
+    {
+        gs := GenSelect1(2)
+        data := []interface{}{0,1,2,3,4,5}
+        result := gs(data)
+        if result != 2 {
+            t.Error("Expected 2")
+        }
+    }
+
+    {
+        gs := GenSelect1(2)
+        data := []interface{}{"foo","bar","baz","foobar"}
+        result := gs(data)
+        if result != "baz" {
+            t.Error("Expected baz")
+        }
+    }
+}
