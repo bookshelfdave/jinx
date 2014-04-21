@@ -3,7 +3,7 @@ package jinx
 import (
     "fmt"
     "strconv"
-    //"reflect"
+    "reflect"
 )
 
 func GenString(s interface{}) interface{} {
@@ -16,7 +16,7 @@ func GenString(s interface{}) interface{} {
         if v,ok := ss[i].(string); ok {
             a += v
         } else {
-            fmt.Println("Invalid result")
+            fmt.Printf("GenString expecting []string, got %s instead\n", reflect.TypeOf(ss[i]))
         }
     }
     return a

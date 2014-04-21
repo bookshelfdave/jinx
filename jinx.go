@@ -228,13 +228,12 @@ func Attempt(subparser *Parser) *Parser {
                     pr := subparser.Parse(ps)
                     ps.Position = preLAPosition
                     if pr.Success {
-                        return &ParseResult{pr.Result, true, ps.Position, pr.Length}
+                        return &ParseResult{p.Gen(pr.Result), true, ps.Position, pr.Length}
                     } else {
                         ps.R.Seek(rewindTo)
                         return &ParseResult{nil, false, ps.Position, 0}
                     }
     }
-    // Gen is unused!
     return &Parser{subparser, parse, GenIdentity}
 }
 
