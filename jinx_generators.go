@@ -6,19 +6,41 @@ import (
 	"strconv"
 )
 
+func GenUnwrap(s interface{}) interface{} {
+	if vv, ok := s.([]interface{}); ok {
+		result := make([]interface{}, 0)
+		for i := range vv {
+			v := vv[i]
+			fmt.Println(v)
+			result = append(result, v)
+		}
+		return result
+	} else if v, ok := s.(interface{}); ok {
+		return v
+	}
+	return ""
+}
+
 func GenString(s interface{}) interface{} {
 	/// TODO: use a byte buffer etc
+
 	var a string
-	ss, ok := s.([]interface{})
-	if !ok {
-		return ""
-	}
-	for i := range ss {
-		if v, ok := ss[i].(string); ok {
-			a += v
-		} else {
-			fmt.Printf("GenString expecting []interface{}, got %s instead\n", reflect.TypeOf(ss[i]))
+	if ss, ok := s.([]interface{}); ok {
+		for i := range ss {
+			if v, ok := ss[i].(string); ok {
+				a += v
+			} else {
+				fmt.Printf("GenString expecting []interface{}, got %s instead\n", reflect.TypeOf(ss[i]))
+			}
 		}
+	} else if ss, ok := s.([]string); ok {
+		for i := range ss {
+			v := ss[i]
+			a += v
+		}
+	} else {
+		// TODO: work on error reporting from Gens
+		fmt.Println("Unknown type for GenString")
 	}
 	return a
 }
@@ -34,16 +56,18 @@ func GenString(s interface{}) interface{} {
 
 func GenListOfStrings(s interface{}) interface{} {
 	var a []string
-	ss, ok := s.([]interface{})
-	if !ok {
-		fmt.Printf("Foo!")
-		return ""
-	}
-	for i := range ss {
-		if v, ok := ss[i].(string); ok {
+	if ss, ok := s.([]interface{}); ok {
+		for i := range ss {
+			if v, ok := ss[i].(string); ok {
+				a = append(a, v)
+			} else {
+				fmt.Printf("GenListOfStrings expecting []string, got %s instead\n", reflect.TypeOf(ss[i]))
+			}
+		}
+	} else if ss, ok := s.([]string); ok {
+		for i := range ss {
+			v := ss[i]
 			a = append(a, v)
-		} else {
-			fmt.Printf("GenListOfStrings expecting []string, got %s instead\n", reflect.TypeOf(ss[i]))
 		}
 	}
 	return a

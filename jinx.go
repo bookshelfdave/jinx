@@ -192,7 +192,7 @@ func Many(subparser *Parser) *Parser {
 		}
 		return &ParseResult{p.Gen(results), true, ps.Position, totalLen}
 	}
-	return &Parser{subparser, parse, GenString}
+	return &Parser{subparser, parse, GenIdentity}
 }
 
 func Many1(subparser *Parser) *Parser {
@@ -221,7 +221,7 @@ func Many1(subparser *Parser) *Parser {
 		}
 		return &ParseResult{p.Gen(results), true, finalPosition, totalLen}
 	}
-	return &Parser{subparser, parse, GenString}
+	return &Parser{subparser, parse, GenIdentity}
 }
 
 func Attempt(subparser *Parser) *Parser {
@@ -332,7 +332,7 @@ func proxyParser(p *Parser, ps *ParserState) *ParseResult {
 }
 
 func Proxy() *Parser {
-	return &Parser{nil, proxyParser, GenString}
+	return &Parser{nil, proxyParser, GenIdentity}
 }
 
 func ProxySetParser(proxy *Parser, p *Parser) {
@@ -353,7 +353,8 @@ func betweenParser(p *Parser, ps *ParserState) *ParseResult {
 		lastResult := bd.last.Parse(ps) // toss the result if valid
 		if lastResult.Success {
 			// note: first length and last length
-			return &ParseResult{p.Gen(pr.Result), true, pr.Position, pr.Length}
+			totalLength := pr.Length + firstResult.Length + lastResult.Length
+			return &ParseResult{p.Gen(pr.Result), true, pr.Position, totalLength}
 		} else {
 			return &ParseResult{nil, false, ps.Position, 0}
 		}
@@ -455,11 +456,10 @@ func sepByParser(p *Parser, ps *ParserState) *ParseResult {
 }
 
 func SepBy(p *Parser, sep *Parser) *Parser {
-	//next := Attempt(Seq(sep, p).PipeGen(GenIdentity)).PipeGen(GenSelect1(1))
 	next := Attempt(Seq(sep, p).PipeGen(GenSelect1(1)))
 	sbd := &sepByData{p, next}
 	// parse the initial p,
-	// the try sequences of Sep, P
+	// then try sequences of Sep, P
 	return &Parser{sbd, sepByParser, GenIdentity}
 }
 
