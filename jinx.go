@@ -266,32 +266,7 @@ func Str(s string) *Parser {
 	return &Parser{s, parse, GenIdentity}
 }
 
-//func seqParser(p *Parser, ps *ParserState) *ParseResult {
-//	allps := p.data.([]*Parser)
-//	results := make([]*ParseResult, len(allps))
-//	raw_results := make([]interface{}, len(allps))
-//
-//	for i := range allps {
-//		results[i] = allps[i].Parse(ps)
-//		//fmt.Printf("Seq: %#v\n", results[i])
-//		raw_results[i] = results[i].Result
-//		if !results[i].Success {
-//			return &ParseResult{nil, false, ps.Position, 0}
-//		}
-//	}
-//
-//	var totalLength int
-//	for _, i := range results {
-//		totalLength += i.Length
-//	}
-//
-//.	return &ParseResult{p.Gen(raw_results),
-//		true,
-//		results[0].Position,
-//		totalLength}
-//}
-
-func seqParser2(p *Parser, ps *ParserState) *ParseResult {
+func seqParser(p *Parser, ps *ParserState) *ParseResult {
 	allps := p.data.([]*Parser)
 	//results := make([]*ParseResult, 0)
 	pos := ps.Position
@@ -323,7 +298,7 @@ func seqParser2(p *Parser, ps *ParserState) *ParseResult {
 }
 
 func Seq(parsers ...*Parser) *Parser {
-	return &Parser{parsers, seqParser2, GenIdentity}
+	return &Parser{parsers, seqParser, GenIdentity}
 }
 
 func altParser(p *Parser, ps *ParserState) *ParseResult {
